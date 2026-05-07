@@ -201,12 +201,12 @@ If any command fails, fix the local setup before continuing.
 
 ### Step 1: Set variables
 
-These variables are referenced by every subsequent command. `CLUSTER_NAME` identifies your cluster. `AWS_REGION=us-west-2` (Oregon) supports all EKS features used here. `NODE_TYPE=t3.medium` gives each worker 2 vCPUs and 4 GB RAM — enough to run all workshop components. `NODE_COUNT=2` spreads pods across two nodes. Change any value before running, but keep it consistent throughout.
+These variables are referenced by every subsequent command. `CLUSTER_NAME` identifies your cluster. `AWS_REGION=ap-southeast-1` (Singapore) minimises latency and cost for this region. `NODE_TYPE=t3.small` gives each worker 2 vCPUs and 2 GB RAM — comfortable for all workshop components. `NODE_COUNT=2` spreads pods across two nodes. Change any value before running, but keep it consistent throughout.
 
 ```bash
 export CLUSTER_NAME=observability-workshop
-export AWS_REGION=us-west-2
-export NODE_TYPE=t3.medium
+export AWS_REGION=ap-southeast-1
+export NODE_TYPE=t3.small
 export NODE_COUNT=2
 ```
 
