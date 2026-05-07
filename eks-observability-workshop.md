@@ -201,7 +201,7 @@ If any command fails, fix the local setup before continuing.
 
 ### Step 1: Set variables
 
-This step defines names and sizes for the cluster resources. Change values only if you need a different region or node type.
+These variables are referenced by every subsequent command. `CLUSTER_NAME` identifies your cluster. `AWS_REGION=us-west-2` (Oregon) supports all EKS features used here. `NODE_TYPE=t3.medium` gives each worker 2 vCPUs and 4 GB RAM — enough to run all workshop components. `NODE_COUNT=2` spreads pods across two nodes. Change any value before running, but keep it consistent throughout.
 
 ```bash
 export CLUSTER_NAME=observability-workshop
@@ -212,7 +212,7 @@ export NODE_COUNT=2
 
 ### Step 2: Create the cluster
 
-Run the command below to provision the managed EKS cluster, worker nodes, and required AWS networking. Wait until the command completes before moving on.
+Creates a VPC, subnets, EKS control plane, and managed worker nodes in a single command. `eksctl` uses CloudFormation behind the scenes, so the entire cluster can be torn down cleanly later. The `--managed` flag means AWS handles node patching and replacement. This takes 10–15 minutes — do not interrupt it or you may leave orphaned AWS resources. When it finishes, `~/.kube/config` is updated automatically.
 
 ```bash
 eksctl create cluster \
@@ -227,7 +227,7 @@ This operation can take 10–15 minutes.
 
 ### Step 3: Verify cluster access
 
-After the cluster is created, confirm that `kubectl` can communicate with it.
+Confirm `kubectl` is talking to the right cluster before deploying anything. Both nodes should show `Ready`; `kubectl get namespaces` confirms the control plane is fully initialized. If nodes show `NotReady`, wait two minutes and retry. If `kubectl` can't reach the API server, run `aws eks update-kubeconfig --name "$CLUSTER_NAME" --region "$AWS_REGION"` to refresh your config.
 
 ```bash
 kubectl get nodes
@@ -248,7 +248,7 @@ Prometheus collects metrics by scraping endpoints exposed by your application an
 
 ### Step 1: Create the monitoring namespace
 
-Create a dedicated namespace so observability tools are grouped separately from your app.
+Creates a dedicated namespace for Prometheus and Grafana, separate from the application. This prevents name collisions and simplifies cleanup — deleting the namespace removes everything inside it. Helm requires the namespace to exist before installing into it.
 
 ```bash
 kubectl create namespace monitoring
@@ -256,7 +256,7 @@ kubectl create namespace monitoring
 
 ### Step 2: Add the Prometheus Helm repository
 
-Register the official Prometheus Helm chart repository and refresh the chart list.
+Registers the Prometheus community chart repository under the alias `prometheus-community` and fetches the latest chart list. Run `helm repo update` whenever you add a new repository to avoid installing stale versions.
 
 ```bash
 helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
@@ -265,9 +265,7 @@ helm repo update
 
 ### Step 3: Create a Prometheus values file
 
-This configures Prometheus with two scrape targets:
-- the demo app metrics endpoint at `/metrics`
-- the OpenTelemetry Collector metrics endpoint
+Overrides chart defaults without modifying the chart itself. This file disables Alertmanager (not needed here), exposes Prometheus via a `LoadBalancer`, and defines two scrape jobs — `demo-app` and `otel-collector` — polling every 15 seconds. Targets use Kubernetes internal DNS names that resolve automatically inside the cluster.
 
 ```bash
 cat <<'EOF' > prometheus-values.yaml
@@ -294,7 +292,7 @@ EOF
 
 ### Step 4: Install Prometheus
 
-Install Prometheus into the `monitoring` namespace using the configuration file.
+Deploys Prometheus into the `monitoring` namespace using your values file. The release name `prometheus` is how Helm tracks this installation — use it to upgrade or uninstall later. If something goes wrong, run `helm uninstall prometheus -n monitoring` before retrying. Allow one to two minutes for the pod to start after the command completes.
 
 ```bash
 helm install prometheus prometheus-community/prometheus \
@@ -304,7 +302,7 @@ helm install prometheus prometheus-community/prometheus \
 
 ### Step 5: Confirm Prometheus
 
-Verify that Prometheus pods are running and the service is created.
+Wait for `prometheus-server` to show `Running` with `1/1` ready before continuing. The `EXTERNAL-IP` column may show `<pending>` for one to three minutes while AWS provisions the load balancer. If the pod stays in `Pending` beyond five minutes, run `kubectl describe pod -n monitoring <pod-name>` and check the Events section for the cause.
 
 ```bash
 kubectl get pods -n monitoring
@@ -319,7 +317,7 @@ If the LoadBalancer service does not yet have an external IP, wait a few minutes
 
 ### Step 6: Access Prometheus
 
-If the service is accessible directly, open the external IP at port `9090`. If not, use port forwarding.
+Tunnels your local port `9090` to the Prometheus Service without needing a public IP. This terminal is occupied while the tunnel runs — open a new one for subsequent steps. At `http://localhost:9090`, check Status → Targets to confirm the demo app and OTel Collector are being scraped successfully.
 
 ```bash
 kubectl port-forward -n monitoring svc/prometheus-server 9090:80
